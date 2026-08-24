@@ -48,13 +48,11 @@ export interface Animal {
 /**
  * At most one feature per round, and none on many rounds, so features stay
  * a small surprise rather than the norm. A river flows under a bridge in
- * the road; a tunnel is a hill the road passes through (the vehicle
- * disappears and re-emerges); a puddle sits on the road and splashes.
- * `halfWidth` is the feature's half-extent along the road.
+ * the road; a puddle sits on the road and splashes. `halfWidth` is the
+ * feature's half-extent along the road.
  */
 export type Feature =
   | { kind: 'river'; x: number; halfWidth: number }
-  | { kind: 'tunnel'; x: number; halfWidth: number }
   | { kind: 'puddle'; x: number; halfWidth: number };
 
 /** A rare, purely decorative sky event. */
@@ -136,8 +134,6 @@ export function roundScenery(
   if (roll < 0.25) {
     feature = { kind: 'river', x: 0.52 + rng() * 0.32, halfWidth: 0.04 + rng() * 0.02 };
   } else if (roll < 0.4) {
-    feature = { kind: 'tunnel', x: 0.58 + rng() * 0.24, halfWidth: 0.07 + rng() * 0.02 };
-  } else if (roll < 0.55) {
     feature = { kind: 'puddle', x: 0.5 + rng() * 0.34, halfWidth: 0.035 };
   }
 
@@ -167,11 +163,11 @@ export function roundScenery(
     );
   }
 
-  // Rivers and tunnels (plus the riverside duck) block a stretch of the
-  // grass strip; puddles sit on the road and block nothing.
+  // A river (plus its riverside duck) blocks a stretch of the grass strip;
+  // puddles sit on the road and block nothing.
   let blockedLo = Infinity;
   let blockedHi = -Infinity;
-  if (feature && feature.kind !== 'puddle') {
+  if (feature?.kind === 'river') {
     blockedLo = feature.x - feature.halfWidth - 0.01;
     blockedHi = feature.x + feature.halfWidth + 0.01;
     for (const a of animals) {
@@ -199,7 +195,7 @@ export function roundScenery(
   // slots are dealt out shuffled, and each occupant jitters inside its slot
   // only as far as its own width allows — so nothing can spawn on top of
   // anything else. Crowded rounds (a feature eating grass) get fewer trees.
-  let treeCount = feature && feature.kind !== 'puddle' ? 2 : 2 + Math.floor(rng() * 2);
+  let treeCount = feature?.kind === 'river' ? 2 : 2 + Math.floor(rng() * 2);
   while (treeCount > 1 && usable / (treeCount + slotKinds.length) < 0.075) {
     treeCount--;
   }

@@ -60,11 +60,11 @@ test('animals and trees never overlap each other', () => {
   }
 });
 
-test('nothing stands in the river or on the tunnel, except the riverside duck', () => {
+test('nothing stands in the river, except the riverside duck', () => {
   for (const scenery of allSceneries(50)) {
     const { feature, animals, trees } = scenery;
-    if (!feature || feature.kind === 'puddle') continue;
-    const duck = feature.kind === 'river' ? animals.find((a) => a.kind === 'duck') : undefined;
+    if (feature?.kind !== 'river') continue;
+    const duck = animals.find((a) => a.kind === 'duck');
     for (const occupant of [
       ...animals
         .filter((a) => a !== duck)
@@ -93,7 +93,7 @@ test('a river always brings a duck to its edge, out of the water', () => {
 test('features and sky events all occur, and many rounds have none', () => {
   const sceneries = allSceneries(80);
   const featureKinds = new Set(sceneries.map((s) => s.feature?.kind ?? 'none'));
-  expect(featureKinds).toEqual(new Set(['none', 'river', 'tunnel', 'puddle']));
+  expect(featureKinds).toEqual(new Set(['none', 'river', 'puddle']));
   const skyKinds = new Set(sceneries.map((s) => s.skyEvent?.kind ?? 'none'));
   expect(skyKinds).toEqual(new Set(['none', 'bird', 'rainbow']));
   const plain = sceneries.filter((s) => !s.feature).length;

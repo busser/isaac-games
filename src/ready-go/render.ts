@@ -238,17 +238,11 @@ export function createRenderer(
               entered && vehicleX <= (feature.x + feature.halfWidth) * W + 2 * u;
             if (splashing) drawSplash(ctx, feature.x * W, vehicleY, u, now);
           }
-          if (entered && !featureCued && feature.kind !== 'tunnel') {
+          if (entered && !featureCued) {
             featureCued = true;
             cues.push({ kind: feature.kind === 'river' ? 'bridge' : 'puddle' });
           }
         }
-      }
-
-      // The tunnel hill goes over the vehicle: the vehicle passes behind
-      // it, disappearing into one mouth and re-emerging from the other.
-      if (feature?.kind === 'tunnel') {
-        drawTunnel(ctx, W, H, roadTopY, roadBottomY, feature.x, feature.halfWidth);
       }
 
       if (ended) {
@@ -480,34 +474,6 @@ function drawSplash(
     const dy = -Math.sin(angle) * dist + c * c * 0.9 * u;
     ctx.beginPath();
     ctx.arc(x + dx, y - 0.3 * u + dy, 0.08 * u * (1 - 0.6 * c), 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-/** A hill over the road; the vehicle drives through, hidden behind it. */
-function drawTunnel(
-  ctx: CanvasRenderingContext2D,
-  W: number,
-  H: number,
-  roadTopY: number,
-  roadBottomY: number,
-  x: number,
-  halfWidth: number,
-): void {
-  const u = 0.05 * H;
-  const cx = x * W;
-  const rx = halfWidth * W;
-  const baseY = roadBottomY + 0.02 * H;
-  ctx.fillStyle = '#79b465';
-  ctx.beginPath();
-  ctx.ellipse(cx, baseY, rx, 0.3 * H, 0, Math.PI, 0);
-  ctx.fill();
-  // The mouths at both ends of the hill.
-  ctx.fillStyle = '#2e2a33';
-  const mouthH = (roadBottomY - roadTopY) * 1.2;
-  for (const mx of [cx - rx + 0.9 * u, cx + rx - 0.9 * u]) {
-    ctx.beginPath();
-    ctx.ellipse(mx, roadBottomY, 0.9 * u, mouthH, 0, Math.PI, 0);
     ctx.fill();
   }
 }

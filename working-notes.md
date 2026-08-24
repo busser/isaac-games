@@ -159,3 +159,7 @@ rule inference, and it costs much more to implement than the other two.
   deals whole slots per remaining segment. A `?seed=` URL parameter pins
   the scenery for reproducing a scene. Verified with headless-Chromium
   screenshots of every feature, the flare, and the sleeping-animal night.
+- **2026-08-25:** Removed the tunnel feature. It looked off on screen and
+  there was no easy way to make it look good. Features are now river or
+  puddle; the tunnel's probability share went to feature-less rounds (~60%
+  of rounds now have no feature).
