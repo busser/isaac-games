@@ -33,7 +33,9 @@ function dispatch(events: GameEvent[], now: number): void {
 }
 
 function startSession(): void {
-  const seed = Date.now() >>> 0;
+  // A `?seed=` URL parameter pins the scenery, to reproduce a scene.
+  const seedParam = Number(new URLSearchParams(location.search).get('seed'));
+  const seed = seedParam >= 1 ? seedParam >>> 0 : Date.now() >>> 0;
   renderer = createRenderer(canvas, seed, DEFAULT_CONFIG.rounds);
   game = createGame(performance.now(), Math.random, DEFAULT_CONFIG);
 }
@@ -70,7 +72,14 @@ function frame(now: number): void {
         restartHold = 0;
       }
     }
-    renderer.draw(game.state(), game.driveProgress(now), now, restartHold);
+    const cues = renderer.draw(
+      game.state(),
+      game.arriveProgress(now),
+      game.driveProgress(now),
+      now,
+      restartHold,
+    );
+    for (const cue of cues) audio.onCue(cue);
   }
   requestAnimationFrame(frame);
 }

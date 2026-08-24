@@ -3,14 +3,17 @@ import { createGame, type Game, type GameConfig } from './game';
 
 const CONFIG: GameConfig = {
   rounds: 3,
+  arriveMs: 2000,
   minRedMs: 500,
   maxRedMs: 3000,
   quietMs: 1000,
   driveMs: 5000,
 };
 
-// rng always returns 0.5, so every red delay is exactly (500 + 3000) / 2.
+// rng always returns 0.5, so every red delay is exactly (500 + 3000) / 2,
+// counted from the moment the vehicle stops at the light.
 const RED_DELAY = 1750;
+const GREEN_AT = CONFIG.arriveMs + RED_DELAY;
 const rng = () => 0.5;
 
 function newGame(now = 0): Game {
@@ -19,7 +22,7 @@ function newGame(now = 0): Game {
 
 /** Complete the current round: wait for green, press, wait out the drive. */
 function playRound(game: Game, now: number): number {
-  while (game.state().phase === 'red') {
+  while (game.state().phase === 'arriving' || game.state().phase === 'red') {
     now += 100;
     game.tick(now);
   }
@@ -29,40 +32,76 @@ function playRound(game: Game, now: number): number {
   return now;
 }
 
-describe('red light', () => {
-  test('turns green after the scheduled delay when nothing is pressed', () => {
+describe('drive-in', () => {
+  test('the round starts with the vehicle arriving, light red', () => {
     const game = newGame();
-    expect(game.tick(RED_DELAY - 1)).toEqual([]);
+    expect(game.state().phase).toBe('arriving');
+    expect(game.tick(CONFIG.arriveMs - 1)).toEqual([]);
+    expect(game.state().phase).toBe('arriving');
+    expect(game.tick(CONFIG.arriveMs)).toEqual([]);
     expect(game.state().phase).toBe('red');
-    expect(game.tick(RED_DELAY)).toEqual(['green']);
+  });
+
+  test('arrive progress goes from 0 to 1 over the drive-in, then stays 1', () => {
+    const game = newGame();
+    expect(game.arriveProgress(0)).toBe(0);
+    expect(game.arriveProgress(CONFIG.arriveMs / 2)).toBe(0.5);
+    game.tick(CONFIG.arriveMs);
+    expect(game.arriveProgress(CONFIG.arriveMs + 500)).toBe(1);
+  });
+
+  test('a press during the drive-in is premature', () => {
+    const game = newGame();
+    expect(game.press(100)).toEqual(['premature']);
+    expect(game.state().phase).toBe('arriving');
+  });
+
+  test('a press late in the drive-in postpones a green that would come too soon', () => {
+    // A red delay shorter than the quiet period, so a press just before
+    // the stop must push green back.
+    const game = createGame(0, rng, { ...CONFIG, minRedMs: 100, maxRedMs: 100 });
+    game.press(1900); // arriving; scheduled green was 2100
+    expect(game.tick(2100)).toEqual([]);
+    expect(game.tick(2899)).toEqual([]);
+    expect(game.tick(2900)).toEqual(['green']);
+  });
+});
+
+describe('red light', () => {
+  test('turns green after the scheduled delay counted from the stop', () => {
+    const game = newGame();
+    expect(game.tick(GREEN_AT - 1)).toEqual([]);
+    expect(game.state().phase).toBe('red');
+    expect(game.tick(GREEN_AT)).toEqual(['green']);
     expect(game.state().phase).toBe('green');
   });
 
   test('a press during red is acknowledged as premature', () => {
     const game = newGame();
-    expect(game.press(100)).toEqual(['premature']);
+    game.tick(CONFIG.arriveMs);
+    expect(game.press(CONFIG.arriveMs + 100)).toEqual(['premature']);
     expect(game.state().phase).toBe('red');
   });
 
   test('a press during red postpones green to a quiet period after it', () => {
     const game = newGame();
-    game.press(1500);
-    expect(game.tick(RED_DELAY)).toEqual([]);
-    expect(game.tick(2499)).toEqual([]);
-    expect(game.tick(2500)).toEqual(['green']);
+    game.press(GREEN_AT - 300);
+    expect(game.tick(GREEN_AT)).toEqual([]);
+    expect(game.tick(GREEN_AT + CONFIG.quietMs - 301)).toEqual([]);
+    expect(game.tick(GREEN_AT + CONFIG.quietMs - 300)).toEqual(['green']);
   });
 
   test('an early press does not postpone a green already scheduled later', () => {
     const game = newGame();
-    game.press(100); // 100 + quietMs = 1100, before the scheduled 1750
-    expect(game.tick(1749)).toEqual([]);
-    expect(game.tick(RED_DELAY)).toEqual(['green']);
+    game.press(100); // 100 + quietMs = 1100, before the scheduled 3750
+    expect(game.tick(GREEN_AT - 1)).toEqual([]);
+    expect(game.tick(GREEN_AT)).toEqual(['green']);
   });
 
   test('mashing keeps the light red until the mashing stops', () => {
     const game = newGame();
     let lastPress = 0;
-    for (let t = 300; t <= 6000; t += 300) {
+    for (let t = 300; t <= 8000; t += 300) {
       game.press(t);
       lastPress = t;
       expect(game.tick(t)).toEqual([]);
@@ -75,35 +114,36 @@ describe('red light', () => {
 describe('green light and drive', () => {
   test('a press during green launches the vehicle', () => {
     const game = newGame();
-    game.tick(RED_DELAY);
-    expect(game.press(2000)).toEqual(['launch']);
+    game.tick(GREEN_AT);
+    expect(game.press(GREEN_AT + 200)).toEqual(['launch']);
     expect(game.state().phase).toBe('driving');
   });
 
   test('presses during the drive are ignored', () => {
     const game = newGame();
-    game.tick(RED_DELAY);
-    game.press(2000);
-    expect(game.press(3000)).toEqual([]);
+    game.tick(GREEN_AT);
+    game.press(GREEN_AT + 200);
+    expect(game.press(GREEN_AT + 1200)).toEqual([]);
     expect(game.state().phase).toBe('driving');
   });
 
   test('drive progress goes from 0 to 1 over the drive duration', () => {
     const game = newGame();
     expect(game.driveProgress(1000)).toBe(0);
-    game.tick(RED_DELAY);
-    game.press(2000);
-    expect(game.driveProgress(2000)).toBe(0);
-    expect(game.driveProgress(4500)).toBe(0.5);
+    game.tick(GREEN_AT);
+    game.press(4000);
+    expect(game.driveProgress(4000)).toBe(0);
+    expect(game.driveProgress(6500)).toBe(0.5);
     expect(game.driveProgress(99999)).toBe(1);
   });
 
-  test('the next round starts when the drive completes', () => {
+  test('the next round starts with a fresh drive-in when the drive completes', () => {
     const game = newGame();
-    game.tick(RED_DELAY);
-    game.press(2000);
-    expect(game.tick(2000 + CONFIG.driveMs)).toEqual(['arrived', 'roundStarted']);
-    expect(game.state()).toEqual({ phase: 'red', round: 1 });
+    game.tick(GREEN_AT);
+    game.press(4000);
+    expect(game.tick(4000 + CONFIG.driveMs)).toEqual(['arrived', 'roundStarted']);
+    expect(game.state()).toEqual({ phase: 'arriving', round: 1 });
+    expect(game.arriveProgress(4000 + CONFIG.driveMs)).toBe(0);
   });
 });
 
@@ -113,9 +153,9 @@ describe('session end', () => {
     let now = 0;
     for (let i = 0; i < CONFIG.rounds - 1; i++) {
       now = playRound(game, now);
-      expect(game.state().phase).toBe('red');
+      expect(game.state().phase).toBe('arriving');
     }
-    while (game.state().phase === 'red') {
+    while (game.state().phase === 'arriving' || game.state().phase === 'red') {
       now += 100;
       game.tick(now);
     }

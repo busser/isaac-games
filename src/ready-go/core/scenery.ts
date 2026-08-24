@@ -5,7 +5,7 @@
  * from here, not from the game rules getting harder.
  *
  * All positions are fractions of the canvas: x in [0, 1] of the width,
- * y (for clouds) in [0, 1] of the height.
+ * y (for clouds and birds) in [0, 1] of the height.
  */
 
 import { mulberry32 } from '../../shared/rng';
@@ -39,15 +39,50 @@ export interface Cloud {
 
 export type AnimalKind = 'sheep' | 'cow' | 'pig' | 'dog' | 'rabbit' | 'duck';
 
+/** An animal standing in the grass. It hops as the vehicle passes. */
+export interface Animal {
+  kind: AnimalKind;
+  x: number;
+}
+
+/**
+ * At most one feature per round, and none on many rounds, so features stay
+ * a small surprise rather than the norm. A river flows under a bridge in
+ * the road; a tunnel is a hill the road passes through (the vehicle
+ * disappears and re-emerges); a puddle sits on the road and splashes.
+ * `halfWidth` is the feature's half-extent along the road.
+ */
+export type Feature =
+  | { kind: 'river'; x: number; halfWidth: number }
+  | { kind: 'tunnel'; x: number; halfWidth: number }
+  | { kind: 'puddle'; x: number; halfWidth: number };
+
+/** A rare, purely decorative sky event. */
+export type SkyEvent =
+  | { kind: 'bird'; y: number; drift: number }
+  | { kind: 'rainbow'; x: number };
+
 export interface Scenery {
   vehicle: Vehicle;
   hills: Hill[];
   trees: Tree[];
   clouds: Cloud[];
-  /** An animal standing in the grass. It hops as the vehicle passes. */
-  animal: { kind: AnimalKind; x: number };
+  /** 1–2 animals; when there is a river, one of them is a duck beside it. */
+  animals: Animal[];
+  feature: Feature | null;
+  skyEvent: SkyEvent | null;
   /** 0 = first round (morning) … 1 = last round (dusk). */
   daylight: number;
+}
+
+/** Half-extent of an animal along the grass, in width fractions. */
+export const ANIMAL_HALF_WIDTH = 0.03;
+
+/** Half-extent of a tree's foliage, in width fractions, for its height. */
+export function treeHalfWidth(height: number): number {
+  // Foliage spreads to roughly 0.46 × height sideways; 0.3 × height in
+  // width fractions is a conservative bound for typical aspect ratios.
+  return 0.3 * height;
 }
 
 const ANIMAL_KINDS: AnimalKind[] = ['sheep', 'cow', 'pig', 'dog', 'rabbit', 'duck'];
@@ -67,6 +102,11 @@ const VEHICLE_PALETTES: Array<[string, string]> = [
 
 const HILL_COLORS = ['#8fce7e', '#7bbf6a', '#a3d98f'];
 const FOLIAGE_COLORS = ['#4e9a51', '#6ab04c', '#3e8948', '#7fb069'];
+
+// Trees and animals stand on the strip of grass to the right of the
+// traffic light.
+const STRIP_LO = 0.42;
+const STRIP_HI = 0.96;
 
 export function roundScenery(
   seed: number,
@@ -91,40 +131,124 @@ export function roundScenery(
     });
   }
 
-  // Trees and the animal stand on the same strip of grass (x in
-  // [0.42, 0.96]), to the right of the traffic light. The strip is cut into
-  // one slot per occupant, slots are dealt out shuffled, and each occupant
-  // jitters inside its slot only as far as its own width allows — so nothing
-  // can spawn on top of anything else.
-  const treeCount = 2 + Math.floor(rng() * 2);
-  const slotWidth = 0.54 / (treeCount + 1);
-  const slots = [...Array(treeCount + 1).keys()];
+  const roll = rng();
+  let feature: Feature | null = null;
+  if (roll < 0.25) {
+    feature = { kind: 'river', x: 0.52 + rng() * 0.32, halfWidth: 0.04 + rng() * 0.02 };
+  } else if (roll < 0.4) {
+    feature = { kind: 'tunnel', x: 0.58 + rng() * 0.24, halfWidth: 0.07 + rng() * 0.02 };
+  } else if (roll < 0.55) {
+    feature = { kind: 'puddle', x: 0.5 + rng() * 0.34, halfWidth: 0.035 };
+  }
+
+  // Like vehicle kinds, animal kinds rotate with the round so one session
+  // shows many different animals. Some rounds add a second, different kind.
+  const firstKind =
+    ANIMAL_KINDS[(round + Math.floor(seed % ANIMAL_KINDS.length)) % ANIMAL_KINDS.length];
+  const animals: Animal[] = [];
+
+  // A river always comes with a duck at the water's edge; it takes the
+  // place of the round's optional second animal.
+  if (feature?.kind === 'river') {
+    const rightEdge = feature.x + feature.halfWidth + ANIMAL_HALF_WIDTH + 0.005;
+    const leftEdge = feature.x - feature.halfWidth - ANIMAL_HALF_WIDTH - 0.005;
+    animals.push({
+      kind: 'duck',
+      x: rightEdge + ANIMAL_HALF_WIDTH <= STRIP_HI ? rightEdge : leftEdge,
+    });
+  }
+
+  const slotKinds: AnimalKind[] = [];
+  if (feature?.kind !== 'river' || firstKind !== 'duck') slotKinds.push(firstKind);
+  if (feature?.kind !== 'river' && rng() < 0.35) {
+    const offset = 1 + Math.floor(rng() * (ANIMAL_KINDS.length - 1));
+    slotKinds.push(
+      ANIMAL_KINDS[(ANIMAL_KINDS.indexOf(firstKind) + offset) % ANIMAL_KINDS.length],
+    );
+  }
+
+  // Rivers and tunnels (plus the riverside duck) block a stretch of the
+  // grass strip; puddles sit on the road and block nothing.
+  let blockedLo = Infinity;
+  let blockedHi = -Infinity;
+  if (feature && feature.kind !== 'puddle') {
+    blockedLo = feature.x - feature.halfWidth - 0.01;
+    blockedHi = feature.x + feature.halfWidth + 0.01;
+    for (const a of animals) {
+      blockedLo = Math.min(blockedLo, a.x - ANIMAL_HALF_WIDTH - 0.01);
+      blockedHi = Math.max(blockedHi, a.x + ANIMAL_HALF_WIDTH + 0.01);
+    }
+  }
+
+  // The usable grass: the strip minus the blocked stretch, as segments.
+  // Segments too short to hold anything are dropped.
+  const segments: Array<{ lo: number; hi: number }> = [];
+  const candidates =
+    blockedLo < blockedHi
+      ? [
+          { lo: STRIP_LO, hi: Math.min(STRIP_HI, blockedLo) },
+          { lo: Math.max(STRIP_LO, blockedHi), hi: STRIP_HI },
+        ]
+      : [{ lo: STRIP_LO, hi: STRIP_HI }];
+  for (const seg of candidates) {
+    if (seg.hi - seg.lo >= 0.07) segments.push(seg);
+  }
+  const usable = segments.reduce((sum, s) => sum + (s.hi - s.lo), 0);
+
+  // Slot placement: the usable grass is cut into one slot per occupant,
+  // slots are dealt out shuffled, and each occupant jitters inside its slot
+  // only as far as its own width allows — so nothing can spawn on top of
+  // anything else. Crowded rounds (a feature eating grass) get fewer trees.
+  let treeCount = feature && feature.kind !== 'puddle' ? 2 : 2 + Math.floor(rng() * 2);
+  while (treeCount > 1 && usable / (treeCount + slotKinds.length) < 0.075) {
+    treeCount--;
+  }
+  const occupantCount = treeCount + slotKinds.length;
+
+  // Deal each segment a share of the slots, always splitting where slots
+  // are currently widest, so no slot straddles the blocked stretch and the
+  // narrowest slot stays as wide as possible.
+  const slotCounts = segments.map(() => 0);
+  for (let s = 0; s < occupantCount; s++) {
+    let best = 0;
+    for (let i = 1; i < segments.length; i++) {
+      const width = (segments[i].hi - segments[i].lo) / (slotCounts[i] + 1);
+      if (width > (segments[best].hi - segments[best].lo) / (slotCounts[best] + 1)) {
+        best = i;
+      }
+    }
+    slotCounts[best]++;
+  }
+  const slots: Array<{ lo: number; hi: number }> = [];
+  for (const [i, seg] of segments.entries()) {
+    const width = (seg.hi - seg.lo) / slotCounts[i];
+    for (let k = 0; k < slotCounts[i]; k++) {
+      slots.push({ lo: seg.lo + k * width, hi: seg.lo + (k + 1) * width });
+    }
+  }
   for (let i = slots.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [slots[i], slots[j]] = [slots[j], slots[i]];
   }
-  const placeInSlot = (slot: number, halfWidth: number): number => {
-    const center = 0.42 + (slot + 0.5) * slotWidth;
-    const jitter = Math.max(0, slotWidth / 2 - halfWidth - 0.005);
+
+  let slotCursor = 0;
+  const placeInSlot = (slot: { lo: number; hi: number }, halfWidth: number): number => {
+    const center = (slot.lo + slot.hi) / 2;
+    const jitter = Math.max(0, (slot.hi - slot.lo) / 2 - halfWidth - 0.005);
     return center + (rng() * 2 - 1) * jitter;
   };
 
-  // Like vehicle kinds, animal kinds rotate with the round so one session
-  // shows many different animals.
-  const animal = {
-    kind: ANIMAL_KINDS[
-      (round + Math.floor(seed % ANIMAL_KINDS.length)) % ANIMAL_KINDS.length
-    ],
-    x: placeInSlot(slots[0], 0.03),
-  };
+  for (const animalKind of slotKinds) {
+    animals.push({ kind: animalKind, x: placeInSlot(slots[slotCursor++], ANIMAL_HALF_WIDTH) });
+  }
 
   const trees: Tree[] = [];
   for (let i = 0; i < treeCount; i++) {
-    const height = 0.1 + rng() * 0.08;
-    // Foliage spreads to roughly 0.46 × height sideways; 0.3 × height in
-    // width fractions is a conservative bound for typical aspect ratios.
+    const slot = slots[slotCursor++];
+    const maxHeight = ((slot.hi - slot.lo) / 2 - 0.006) / 0.3;
+    const height = Math.min(0.1 + rng() * 0.08, maxHeight);
     trees.push({
-      x: placeInSlot(slots[i + 1], 0.3 * height),
+      x: placeInSlot(slot, treeHalfWidth(height)),
       height,
       foliage: pick(FOLIAGE_COLORS),
     });
@@ -140,12 +264,22 @@ export function roundScenery(
     });
   }
 
+  const skyRoll = rng();
+  let skyEvent: SkyEvent | null = null;
+  if (skyRoll < 0.16) {
+    skyEvent = { kind: 'bird', y: 0.1 + rng() * 0.15, drift: rng() };
+  } else if (skyRoll < 0.25) {
+    skyEvent = { kind: 'rainbow', x: 0.3 + rng() * 0.4 };
+  }
+
   return {
     vehicle: { kind, bodyColor, accentColor },
     hills,
     trees,
     clouds,
-    animal,
+    animals,
+    feature,
+    skyEvent,
     daylight: totalRounds <= 1 ? 1 : round / (totalRounds - 1),
   };
 }

@@ -7,15 +7,16 @@ session ends. Design context and research grounding live in
 
 ## Current state (2026-08-24)
 
-Ready… Go! is playable. The project is scaffolded (TypeScript + Vite + Vitest
-+ ESLint, mirroring `busser/naturalchimie`), tested, and deploys to GitHub
-Pages (`busser/isaac-games`, `games.f4t.dev`) on push to main. The core state
+Ready… Go! is playable and survived its first child playtest (Isaac loved
+it). The project is scaffolded (TypeScript + Vite + Vitest + ESLint,
+mirroring `busser/naturalchimie`), tested, and deploys to GitHub Pages
+(`busser/isaac-games`, `games.f4t.dev`) on push to main. The core state
 machine is unit-tested, and the game was verified end to end in headless
-Chromium: red wait, premature-press rock, green, drive, eight rounds, night
-wind-down, parent-click restart.
+Chromium after each batch of changes.
 
-Waiting on: the `games.f4t.dev` DNS record (Arthur), and a real playtest with
-the child.
+Waiting on: the next playtest with the child, now that the post-playtest
+improvement batch (drive-in rounds, scene features, animal calls, sleeping
+animals) is in.
 
 ## Scope
 
@@ -36,11 +37,15 @@ rule inference, and it costs much more to implement than the other two.
   Green appears only after a short quiet period with no presses (on the order
   of 1 second) on top of the scheduled random delay. This makes waiting
   load-bearing: mashing can no longer launch the vehicle at green onset.
-- **Red delay range: 2–6 s** (2026-08-24). The initial discussion said
-  0.5–3 s; Arthur found that too short after trying the game and proposed
-  5–10 s. Claude pushed back (the research framing wants a small inhibition
-  demand, not endurance) and we compromised on 2–6 s pending a playtest with
-  the child.
+- **Red delay range: 0.5–2 s, counted from the stop** (2026-08-24, after
+  the child playtest). Each round now opens with the vehicle driving in
+  from the left and stopping at the red light (~2.3 s); the random red
+  delay starts when the car stops, not when the round begins. The drive-in
+  carries most of the wait and acts out the causal story (the car stops
+  *because* of the light), so the delay on top is short. History: the
+  initial discussion said 0.5–3 s; Arthur found that too short and
+  proposed 5–10 s; we compromised on 2–6 s; the drive-in replaced most of
+  that.
 - **No visible countdown or refill bar during red.** Three reasons: a bar that
   refills on press makes the error salient and could itself become a fun toy
   (press → bar moves is a contingent effect, which rewards pressing during
@@ -101,14 +106,15 @@ rule inference, and it costs much more to implement than the other two.
 
 - Keyboard Lock API (capture Escape and system combos in fullscreen): not
   implemented yet; decide after the first real playtests.
-- Tuning after playtests: red-delay range (0.5–3 s), quiet period (1 s),
-  drive duration (5 s), round count (8).
+- Tuning after playtests: drive-in duration (2.3 s), red-delay range
+  (0.5–2 s from the stop), quiet period (1 s), drive duration (5 s), round
+  count (8), feature/sky-event frequencies.
 
 ## Next steps
 
-1. Arthur adds the DNS record: CNAME `games.f4t.dev` → `busser.github.io`.
-2. Playtest with the child; feed observations back into this file.
-3. When Ready… Go! is validated, start Where Did He Hide? (game 2).
+1. Playtest the improvement batch with the child; feed observations back
+   into this file.
+2. When Ready… Go! is validated, start Where Did He Hide? (game 2).
 
 ## Session log
 
@@ -132,3 +138,24 @@ rule inference, and it costs much more to implement than the other two.
   trees and the animal are dealt shuffled slots of the grass strip (jitter
   bounded by each occupant's width) so they can no longer overlap; a test
   checks 400 generated rounds for animal–tree clearance.
+- **2026-08-24 (after the first child playtest):** Big improvement batch,
+  all Arthur-approved. (1) Rounds now open with the vehicle driving in from
+  the left and decelerating to a stop at the red light; the red timer
+  starts at the stop (see the red-delay decision above). A press during the
+  drive-in counts as premature. (2) On a premature press the red lamp
+  flares (mirror of the green pulse) so the light visibly answers the
+  press; the car rock and "bup" stay. (3) Per-round scene features, at most
+  one per round and none on ~45%: a river under a plank bridge (wheels
+  clonk; a duck always sits at the water's edge), a tunnel hill the vehicle
+  disappears into, or a road puddle it splashes through. (4) Some rounds
+  get a second animal; each hops in turn as the vehicle passes. (5) Soft
+  synthesized animal calls when the vehicle passes an animal (rabbit gets a
+  boing — rabbits are quiet). (6) Rare sky events: a gliding bird or a
+  faint rainbow. (7) On the night scene, the animals visibly sleep: lying
+  down, closed eyes, breathing, drifting z's — it is not just night, it is
+  bedtime. Mechanics: the renderer returns per-frame "scene cues" that main
+  forwards to audio (only the renderer knows screen positions; audio stays
+  decoupled); grass placement now subtracts feature-blocked stretches and
+  deals whole slots per remaining segment. A `?seed=` URL parameter pins
+  the scenery for reproducing a scene. Verified with headless-Chromium
+  screenshots of every feature, the flare, and the sleeping-animal night.
