@@ -37,16 +37,20 @@ export interface Cloud {
   scale: number;
 }
 
+export type AnimalKind = 'sheep' | 'cow' | 'pig' | 'dog' | 'rabbit' | 'duck';
+
 export interface Scenery {
   vehicle: Vehicle;
   hills: Hill[];
   trees: Tree[];
   clouds: Cloud[];
-  /** A sheep standing in the grass, or null. It hops as the vehicle passes. */
-  sheep: { x: number } | null;
+  /** An animal standing in the grass, or null. It hops as the vehicle passes. */
+  animal: { kind: AnimalKind; x: number } | null;
   /** 0 = first round (morning) … 1 = last round (dusk). */
   daylight: number;
 }
+
+const ANIMAL_KINDS: AnimalKind[] = ['sheep', 'cow', 'pig', 'dog', 'rabbit', 'duck'];
 
 const VEHICLE_KINDS: VehicleKind[] = ['car', 'bus', 'truck', 'tractor'];
 
@@ -114,7 +118,18 @@ export function roundScenery(
     hills,
     trees,
     clouds,
-    sheep: rng() < 0.5 ? { x: 0.55 + rng() * 0.3 } : null,
+    // Like vehicle kinds, animal kinds rotate with the round so one session
+    // shows many different animals.
+    animal:
+      rng() < 0.75
+        ? {
+            kind: ANIMAL_KINDS[
+              (round + Math.floor(seed % ANIMAL_KINDS.length)) %
+                ANIMAL_KINDS.length
+            ],
+            x: 0.55 + rng() * 0.3,
+          }
+        : null,
     daylight: totalRounds <= 1 ? 1 : round / (totalRounds - 1),
   };
 }

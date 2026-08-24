@@ -41,8 +41,10 @@ export interface GameConfig {
 
 export const DEFAULT_CONFIG: GameConfig = {
   rounds: 8,
-  minRedMs: 500,
-  maxRedMs: 3000,
+  // 2–6 s: raised from the initial discussion's 0.5–3 s after the first
+  // parent playtest found the wait too short. Revisit after a child playtest.
+  minRedMs: 2000,
+  maxRedMs: 6000,
   quietMs: 1000,
   driveMs: 5000,
 };

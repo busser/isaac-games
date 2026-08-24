@@ -10,12 +10,26 @@
  */
 
 import type { GameEvent, GameState } from './core/game';
-import { roundScenery, type Scenery, type Vehicle } from './core/scenery';
+import {
+  roundScenery,
+  type AnimalKind,
+  type Scenery,
+  type Vehicle,
+} from './core/scenery';
 import { mulberry32 } from '../shared/rng';
 
 export interface Renderer {
   onEvent(event: GameEvent, now: number): void;
-  draw(state: GameState, driveProgress: number, now: number): void;
+  /**
+   * Draw one frame. `restartHold` is the parent's restart gesture progress
+   * in [0, 1]; nonzero values show a small progress ring on the night scene.
+   */
+  draw(
+    state: GameState,
+    driveProgress: number,
+    now: number,
+    restartHold?: number,
+  ): void;
 }
 
 type Rgb = [number, number, number];
@@ -98,7 +112,7 @@ export function createRenderer(
       else if (event === 'sessionEnded') endedAt = now;
     },
 
-    draw(state, driveProgress, now) {
+    draw(state, driveProgress, now, restartHold = 0) {
       const dpr = window.devicePixelRatio || 1;
       const W = canvas.clientWidth;
       const H = canvas.clientHeight;
@@ -130,11 +144,19 @@ export function createRenderer(
 
       const vehicleX =
         idleX + drivenDistance(driveProgress) * (W + 6 * u - idleX);
-      if (world.sheep) {
+      if (world.animal) {
         const hopping =
           state.phase === 'driving' &&
-          Math.abs(vehicleX - world.sheep.x * W) < 0.1 * W;
-        drawSheep(ctx, world.sheep.x * W, roadTopY - 0.2 * u, u, hopping, now);
+          Math.abs(vehicleX - world.animal.x * W) < 0.1 * W;
+        drawAnimal(
+          ctx,
+          world.animal.kind,
+          world.animal.x * W,
+          roadTopY - 0.2 * u,
+          u,
+          hopping,
+          now,
+        );
       }
 
       drawTrafficLight(ctx, lightX, roadTopY, u, state.phase, greenAt, now);
@@ -158,6 +180,13 @@ export function createRenderer(
 
       if (ended) {
         drawNight(ctx, W, H, horizonY, stars, Math.min(1, (now - endedAt) / 3000), now);
+        if (restartHold > 0) {
+          ctx.strokeStyle = 'rgba(255, 250, 220, 0.6)';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(W - 44, H - 44, 15, -Math.PI / 2, -Math.PI / 2 + restartHold * Math.PI * 2);
+          ctx.stroke();
+        }
       }
     },
   };
@@ -262,35 +291,135 @@ function drawTrees(
   }
 }
 
-function drawSheep(
+// How high each animal hops as the vehicle passes, in vehicle units.
+const HOP_HEIGHTS: Record<AnimalKind, number> = {
+  sheep: 0.5,
+  cow: 0.35,
+  pig: 0.45,
+  dog: 0.6,
+  rabbit: 0.9,
+  duck: 0.4,
+};
+
+/** Draw an animal standing on the grass at (x, groundY), facing the road. */
+function drawAnimal(
   ctx: CanvasRenderingContext2D,
+  kind: AnimalKind,
   x: number,
   groundY: number,
   u: number,
   hopping: boolean,
   now: number,
 ): void {
-  const hop = hopping ? Math.abs(Math.sin(now / 90)) * 0.5 * u : 0;
+  const hop = hopping ? Math.abs(Math.sin(now / 90)) * HOP_HEIGHTS[kind] * u : 0;
   const y = groundY - hop;
-  ctx.strokeStyle = '#494539';
-  ctx.lineWidth = u * 0.08;
-  for (const leg of [-0.3, 0.1, 0.35]) {
+
+  const legs = (color: string, xs: number[], top: number): void => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = u * 0.08;
+    for (const lx of xs) {
+      ctx.beginPath();
+      ctx.moveTo(x + lx * u, y - top * u);
+      ctx.lineTo(x + lx * u, y);
+      ctx.stroke();
+    }
+  };
+  const dot = (dx: number, dy: number, r: number, color: string): void => {
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(x + leg * u, y - 0.3 * u);
-    ctx.lineTo(x + leg * u, y);
-    ctx.stroke();
+    ctx.arc(x + dx * u, y + dy * u, r * u, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  const blob = (dx: number, dy: number, rx: number, ry: number, color: string): void => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(x + dx * u, y + dy * u, rx * u, ry * u, 0, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  switch (kind) {
+    case 'sheep': {
+      legs('#494539', [-0.3, 0.1, 0.35], 0.3);
+      ctx.fillStyle = '#f4f1e8';
+      ctx.beginPath();
+      ctx.arc(x, y - 0.55 * u, 0.4 * u, 0, Math.PI * 2);
+      ctx.arc(x - 0.3 * u, y - 0.5 * u, 0.3 * u, 0, Math.PI * 2);
+      ctx.arc(x + 0.3 * u, y - 0.5 * u, 0.3 * u, 0, Math.PI * 2);
+      ctx.arc(x + 0.1 * u, y - 0.75 * u, 0.28 * u, 0, Math.PI * 2);
+      ctx.fill();
+      dot(0.55, -0.65, 0.18, '#494539');
+      break;
+    }
+    case 'cow': {
+      legs('#8c7362', [-0.45, -0.2, 0.2, 0.45], 0.35);
+      ctx.fillStyle = '#f4f1e8';
+      ctx.beginPath();
+      ctx.roundRect(x - 0.62 * u, y - 1.05 * u, 1.24 * u, 0.75 * u, 0.3 * u);
+      ctx.fill();
+      blob(-0.2, -0.72, 0.22, 0.16, '#5b4a3f');
+      blob(0.28, -0.92, 0.16, 0.11, '#5b4a3f');
+      dot(0.68, -1.05, 0.24, '#f4f1e8');
+      blob(0.5, -1.22, 0.1, 0.06, '#5b4a3f'); // ear
+      blob(0.78, -0.96, 0.14, 0.1, '#f0b7ba'); // muzzle
+      dot(0.62, -1.12, 0.05, '#3b332c'); // eye
+      break;
+    }
+    case 'pig': {
+      legs('#d98aa3', [-0.32, -0.05, 0.28], 0.3);
+      blob(0, -0.58, 0.55, 0.38, '#eda3b5');
+      dot(0.5, -0.65, 0.26, '#eda3b5');
+      ctx.beginPath(); // curly tail
+      ctx.strokeStyle = '#d98aa3';
+      ctx.lineWidth = u * 0.07;
+      ctx.arc(x - 0.58 * u, y - 0.65 * u, 0.09 * u, 0.5, 4.5);
+      ctx.stroke();
+      blob(0.55, -0.92, 0.08, 0.11, '#d98aa3'); // ear
+      blob(0.72, -0.62, 0.11, 0.08, '#f5c1cf'); // snout
+      dot(0.58, -0.72, 0.05, '#3b332c'); // eye
+      break;
+    }
+    case 'dog': {
+      legs('#8a5f3c', [-0.35, 0.25], 0.35);
+      ctx.strokeStyle = '#a67447'; // tail
+      ctx.lineWidth = u * 0.1;
+      ctx.beginPath();
+      ctx.moveTo(x - 0.5 * u, y - 0.75 * u);
+      ctx.lineTo(x - 0.75 * u, y - 1.05 * u);
+      ctx.stroke();
+      ctx.fillStyle = '#a67447';
+      ctx.beginPath();
+      ctx.roundRect(x - 0.5 * u, y - 0.85 * u, 1.0 * u, 0.55 * u, 0.25 * u);
+      ctx.fill();
+      dot(0.55, -0.95, 0.24, '#a67447');
+      blob(0.42, -1.1, 0.09, 0.16, '#8a5f3c'); // floppy ear
+      dot(0.78, -0.92, 0.07, '#3b332c'); // nose
+      dot(0.6, -1.02, 0.05, '#3b332c'); // eye
+      break;
+    }
+    case 'rabbit': {
+      blob(0.16, -0.92, 0.06, 0.22, '#c9c2b2'); // ears
+      blob(0.32, -0.9, 0.06, 0.22, '#c9c2b2');
+      dot(0, -0.35, 0.3, '#dcd6c9');
+      dot(0.24, -0.6, 0.18, '#dcd6c9');
+      dot(-0.28, -0.32, 0.1, '#f4f1e8'); // tail
+      dot(0.32, -0.64, 0.04, '#3b332c'); // eye
+      break;
+    }
+    case 'duck': {
+      legs('#e8862e', [-0.05, 0.14], 0.14);
+      blob(0, -0.35, 0.36, 0.24, '#f2d24b');
+      blob(-0.08, -0.35, 0.18, 0.12, '#e3bd35'); // wing
+      dot(0.3, -0.62, 0.15, '#f2d24b');
+      ctx.fillStyle = '#e8862e'; // beak
+      ctx.beginPath();
+      ctx.moveTo(x + 0.42 * u, y - 0.68 * u);
+      ctx.lineTo(x + 0.6 * u, y - 0.62 * u);
+      ctx.lineTo(x + 0.42 * u, y - 0.56 * u);
+      ctx.fill();
+      dot(0.32, -0.66, 0.04, '#3b332c'); // eye
+      break;
+    }
   }
-  ctx.fillStyle = '#f4f1e8';
-  ctx.beginPath();
-  ctx.arc(x, y - 0.55 * u, 0.4 * u, 0, Math.PI * 2);
-  ctx.arc(x - 0.3 * u, y - 0.5 * u, 0.3 * u, 0, Math.PI * 2);
-  ctx.arc(x + 0.3 * u, y - 0.5 * u, 0.3 * u, 0, Math.PI * 2);
-  ctx.arc(x + 0.1 * u, y - 0.75 * u, 0.28 * u, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#494539';
-  ctx.beginPath();
-  ctx.arc(x + 0.55 * u, y - 0.65 * u, 0.18 * u, 0, Math.PI * 2);
-  ctx.fill();
 }
 
 function drawTrafficLight(
@@ -525,6 +654,33 @@ function makeStars(seed: number): Star[] {
   return stars;
 }
 
+const moonSprites = new Map<number, HTMLCanvasElement>();
+
+/**
+ * A crescent moon on its own small canvas. Carving the bite out there (with
+ * destination-out) keeps the night sky behind the moon untouched, instead of
+ * papering over it with a nearly-matching dark disc.
+ */
+function crescentSprite(radius: number): HTMLCanvasElement {
+  const r = Math.ceil(radius);
+  let sprite = moonSprites.get(r);
+  if (sprite) return sprite;
+  sprite = document.createElement('canvas');
+  sprite.width = sprite.height = r * 2 + 2;
+  const g = sprite.getContext('2d')!;
+  const c = r + 1;
+  g.fillStyle = '#f5f0d2';
+  g.beginPath();
+  g.arc(c, c, r, 0, Math.PI * 2);
+  g.fill();
+  g.globalCompositeOperation = 'destination-out';
+  g.beginPath();
+  g.arc(c - r * 0.45, c - r * 0.2, r * 0.85, 0, Math.PI * 2);
+  g.fill();
+  moonSprites.set(r, sprite);
+  return sprite;
+}
+
 /** The ended session's night: fades in over the dusk scene, then breathes. */
 function drawNight(
   ctx: CanvasRenderingContext2D,
@@ -546,18 +702,10 @@ function drawNight(
     ctx.fill();
   }
 
-  // Crescent moon: a bright disc with a sky-colored bite.
-  const moonX = 0.75 * W;
-  const moonY = 0.2 * H;
-  const moonR = 0.045 * H;
-  ctx.fillStyle = `rgba(245, 240, 210, ${t})`;
-  ctx.beginPath();
-  ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = `rgba(11, 21, 51, ${t})`;
-  ctx.beginPath();
-  ctx.arc(moonX - moonR * 0.45, moonY - moonR * 0.2, moonR * 0.85, 0, Math.PI * 2);
-  ctx.fill();
+  const moon = crescentSprite(0.045 * H);
+  ctx.globalAlpha = t;
+  ctx.drawImage(moon, 0.75 * W - moon.width / 2, 0.2 * H - moon.height / 2);
+  ctx.globalAlpha = 1;
 
   // A few fireflies drifting over the dark grass.
   for (let i = 0; i < 3; i++) {

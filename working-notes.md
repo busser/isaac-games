@@ -34,9 +34,13 @@ rule inference, and it costs much more to implement than the other two.
 
 - **Game 1 anti-mashing rule:** pressing during red invisibly postpones green.
   Green appears only after a short quiet period with no presses (on the order
-  of 1 second) on top of the scheduled random delay (0.5–3 s). This makes
-  waiting load-bearing: mashing can no longer launch the vehicle at green
-  onset.
+  of 1 second) on top of the scheduled random delay. This makes waiting
+  load-bearing: mashing can no longer launch the vehicle at green onset.
+- **Red delay range: 2–6 s** (2026-08-24). The initial discussion said
+  0.5–3 s; Arthur found that too short after trying the game and proposed
+  5–10 s. Claude pushed back (the research framing wants a small inhibition
+  demand, not endurance) and we compromised on 2–6 s pending a playtest with
+  the child.
 - **No visible countdown or refill bar during red.** Three reasons: a bar that
   refills on press makes the error salient and could itself become a fun toy
   (press → bar moves is a contingent effect, which rewards pressing during
@@ -82,10 +86,13 @@ rule inference, and it costs much more to implement than the other two.
 - App structure: multi-page Vite app; `index.html` launcher + one
   `<game>.html` per game; per-game `src/<game>/` with a pure `core/` layer
   (unit-tested, no DOM) and render/audio layers reacting to core events.
-- Parent gate: mouse clicks. A click starts a session (also unlocks audio and
-  requests fullscreen); a click on the ended night scene starts a new one.
-  The child cannot use the trackpad, so clicks are parent-only. No keyboard
-  combination needed.
+- Parent gate: a click on the start overlay begins the first session (also
+  unlocks audio and requests fullscreen). Restarting from the night scene
+  requires holding the space bar for 3 seconds (a subtle progress ring shows
+  bottom-right); a click was rejected as too easy to trigger with an
+  accidental trackpad tap. Known caveat: a toddler leaning on the space bar
+  for 3 s restarts too — accepted, since the consequence is just a new
+  session.
 - Soft ending: 8 rounds; the sky moves morning → dusk across the session,
   then fades into a starry night with moon and fireflies. The wind-down is
   scenery, not a message.
@@ -113,3 +120,9 @@ rule inference, and it costs much more to implement than the other two.
   verified end to end in headless Chromium including the night scene and
   restart. Created `busser/isaac-games`, enabled GitHub Pages with the
   custom domain.
+- **2026-08-24 (Arthur's first feedback):** DNS is live. Fixed the moon (a
+  real crescent sprite instead of a dark disc over the bright one), raised
+  the red delay to 2–6 s, added five more animals (cow, pig, dog, rabbit,
+  duck — kinds rotate per round like vehicles), replaced the click restart
+  with the 3 s space-bar hold, and gave the launch sound a proper double-rev
+  engine (detuned saws + lowpass + noise rumble).

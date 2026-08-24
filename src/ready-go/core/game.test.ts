@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { createGame, DEFAULT_CONFIG, type Game, type GameConfig } from './game';
+import { createGame, type Game, type GameConfig } from './game';
 
 const CONFIG: GameConfig = {
   rounds: 3,
@@ -133,9 +133,4 @@ describe('session end', () => {
     expect(game.tick(now + 200)).toEqual([]);
     expect(game.driveProgress(now + 300)).toBe(0);
   });
-});
-
-test('default config is within the ranges from the design discussion', () => {
-  expect(DEFAULT_CONFIG.minRedMs).toBeGreaterThanOrEqual(500);
-  expect(DEFAULT_CONFIG.maxRedMs).toBeLessThanOrEqual(3000);
 });
