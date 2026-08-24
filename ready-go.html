@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Ready… Go!</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0b1533;
+      }
+      #scene {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      #start {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.2rem;
+        background: linear-gradient(#bfe3f7, #eaf6ff 60%, #cdeec2);
+        cursor: pointer;
+        font-family: -apple-system, 'Segoe UI', sans-serif;
+        color: #2b5876;
+        user-select: none;
+      }
+      #start .play {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 7rem;
+        height: 7rem;
+        border-radius: 50%;
+        background: #ffffffcc;
+        box-shadow: 0 6px 18px #2b587633;
+        font-size: 3rem;
+      }
+      #start .hint {
+        font-size: 1rem;
+        opacity: 0.7;
+      }
+      #start[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="start">
+      <div class="play">▶</div>
+      <div class="hint">Click to start</div>
+    </div>
+    <script type="module" src="/src/ready-go/main.ts"></script>
+  </body>
+</html>
