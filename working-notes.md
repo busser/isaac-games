@@ -126,3 +126,9 @@ rule inference, and it costs much more to implement than the other two.
   duck — kinds rotate per round like vehicles), replaced the click restart
   with the 3 s space-bar hold, and gave the launch sound a proper double-rev
   engine (detuned saws + lowpass + noise rumble).
+- **2026-08-24 (Arthur's second feedback):** Reverted the launch sound to
+  the original simple vroom — Arthur preferred it (noted in `audio.ts` so it
+  doesn't get "improved" again). Every round now has exactly one animal, and
+  trees and the animal are dealt shuffled slots of the grass strip (jitter
+  bounded by each occupant's width) so they can no longer overlap; a test
+  checks 400 generated rounds for animal–tree clearance.

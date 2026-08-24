@@ -144,20 +144,18 @@ export function createRenderer(
 
       const vehicleX =
         idleX + drivenDistance(driveProgress) * (W + 6 * u - idleX);
-      if (world.animal) {
-        const hopping =
-          state.phase === 'driving' &&
-          Math.abs(vehicleX - world.animal.x * W) < 0.1 * W;
-        drawAnimal(
-          ctx,
-          world.animal.kind,
-          world.animal.x * W,
-          roadTopY - 0.2 * u,
-          u,
-          hopping,
-          now,
-        );
-      }
+      const hopping =
+        state.phase === 'driving' &&
+        Math.abs(vehicleX - world.animal.x * W) < 0.1 * W;
+      drawAnimal(
+        ctx,
+        world.animal.kind,
+        world.animal.x * W,
+        roadTopY - 0.2 * u,
+        u,
+        hopping,
+        now,
+      );
 
       drawTrafficLight(ctx, lightX, roadTopY, u, state.phase, greenAt, now);
 

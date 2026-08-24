@@ -75,64 +75,11 @@ export function createAudio(): Audio {
     play({ type: 'triangle', from: 1320, duration: 0.22, gain: 0.07, delay: 0.03 });
   }
 
-  let noise: AudioBuffer | null = null;
-
-  function noiseBuffer(): AudioBuffer {
-    if (!noise) {
-      noise = ctx!.createBuffer(1, ctx!.sampleRate, ctx!.sampleRate);
-      const data = noise.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    }
-    return noise;
-  }
-
-  // A toy engine: two detuned saws through a resonant lowpass, with the
-  // pitch doing a small rev, settling, then a bigger rev as the vehicle
-  // pulls away — "vroom, vrooooom" — over a bed of low rumble.
+  // A richer double-rev engine was tried and rejected: the simple version
+  // below sounded better to the parent.
   function vroom(): void {
-    if (!ctx || !master) return;
-    const t0 = ctx.currentTime;
-
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0, t0);
-    env.gain.linearRampToValueAtTime(0.26, t0 + 0.06);
-    env.gain.setValueAtTime(0.26, t0 + 1.0);
-    env.gain.exponentialRampToValueAtTime(0.001, t0 + 1.6);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(320, t0);
-    filter.frequency.exponentialRampToValueAtTime(950, t0 + 1.1);
-    filter.Q.value = 4;
-    filter.connect(env);
-    env.connect(master);
-
-    for (const detune of [0, 12]) {
-      const osc = ctx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.detune.value = detune;
-      osc.frequency.setValueAtTime(50, t0);
-      osc.frequency.exponentialRampToValueAtTime(140, t0 + 0.25);
-      osc.frequency.exponentialRampToValueAtTime(85, t0 + 0.45);
-      osc.frequency.exponentialRampToValueAtTime(240, t0 + 1.0);
-      osc.frequency.exponentialRampToValueAtTime(150, t0 + 1.6);
-      osc.connect(filter);
-      osc.start(t0);
-      osc.stop(t0 + 1.65);
-    }
-
-    const rumble = ctx.createBufferSource();
-    rumble.buffer = noiseBuffer();
-    const rumbleFilter = ctx.createBiquadFilter();
-    rumbleFilter.type = 'lowpass';
-    rumbleFilter.frequency.value = 220;
-    const rumbleGain = ctx.createGain();
-    rumbleGain.gain.setValueAtTime(0.1, t0);
-    rumbleGain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.4);
-    rumble.connect(rumbleFilter);
-    rumbleFilter.connect(rumbleGain);
-    rumbleGain.connect(master);
-    rumble.start(t0);
-    rumble.stop(t0 + 1.4);
+    play({ type: 'sawtooth', from: 65, to: 190, duration: 0.8, gain: 0.3, lowpass: 420 });
+    play({ type: 'square', from: 55, to: 120, duration: 0.6, gain: 0.1, lowpass: 260 });
   }
 
   // C major pentatonic around C5; a short random rising phrase per arrival.

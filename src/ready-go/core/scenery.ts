@@ -44,8 +44,8 @@ export interface Scenery {
   hills: Hill[];
   trees: Tree[];
   clouds: Cloud[];
-  /** An animal standing in the grass, or null. It hops as the vehicle passes. */
-  animal: { kind: AnimalKind; x: number } | null;
+  /** An animal standing in the grass. It hops as the vehicle passes. */
+  animal: { kind: AnimalKind; x: number };
   /** 0 = first round (morning) … 1 = last round (dusk). */
   daylight: number;
 }
@@ -91,14 +91,41 @@ export function roundScenery(
     });
   }
 
+  // Trees and the animal stand on the same strip of grass (x in
+  // [0.42, 0.96]), to the right of the traffic light. The strip is cut into
+  // one slot per occupant, slots are dealt out shuffled, and each occupant
+  // jitters inside its slot only as far as its own width allows — so nothing
+  // can spawn on top of anything else.
+  const treeCount = 2 + Math.floor(rng() * 2);
+  const slotWidth = 0.54 / (treeCount + 1);
+  const slots = [...Array(treeCount + 1).keys()];
+  for (let i = slots.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [slots[i], slots[j]] = [slots[j], slots[i]];
+  }
+  const placeInSlot = (slot: number, halfWidth: number): number => {
+    const center = 0.42 + (slot + 0.5) * slotWidth;
+    const jitter = Math.max(0, slotWidth / 2 - halfWidth - 0.005);
+    return center + (rng() * 2 - 1) * jitter;
+  };
+
+  // Like vehicle kinds, animal kinds rotate with the round so one session
+  // shows many different animals.
+  const animal = {
+    kind: ANIMAL_KINDS[
+      (round + Math.floor(seed % ANIMAL_KINDS.length)) % ANIMAL_KINDS.length
+    ],
+    x: placeInSlot(slots[0], 0.03),
+  };
+
   const trees: Tree[] = [];
-  const treeCount = 2 + Math.floor(rng() * 3);
   for (let i = 0; i < treeCount; i++) {
+    const height = 0.1 + rng() * 0.08;
+    // Foliage spreads to roughly 0.46 × height sideways; 0.3 × height in
+    // width fractions is a conservative bound for typical aspect ratios.
     trees.push({
-      // Keep trees to the right of the traffic light so they read as the
-      // countryside the vehicle drives through.
-      x: 0.45 + ((i + rng()) / treeCount) * 0.5,
-      height: 0.1 + rng() * 0.08,
+      x: placeInSlot(slots[i + 1], 0.3 * height),
+      height,
       foliage: pick(FOLIAGE_COLORS),
     });
   }
@@ -118,18 +145,7 @@ export function roundScenery(
     hills,
     trees,
     clouds,
-    // Like vehicle kinds, animal kinds rotate with the round so one session
-    // shows many different animals.
-    animal:
-      rng() < 0.75
-        ? {
-            kind: ANIMAL_KINDS[
-              (round + Math.floor(seed % ANIMAL_KINDS.length)) %
-                ANIMAL_KINDS.length
-            ],
-            x: 0.55 + rng() * 0.3,
-          }
-        : null,
+    animal,
     daylight: totalRounds <= 1 ? 1 : round / (totalRounds - 1),
   };
 }
