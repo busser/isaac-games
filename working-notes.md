@@ -84,6 +84,16 @@ rule inference, and it costs much more to implement than the other two.
   account for the child. That account is the real security boundary.
 - Known accepted risk: hardware keys (function row volume/brightness, Touch
   ID/power key) cannot be captured by the browser. Nothing to do about it.
+- **Kiosk wrapper (2026-08-27):** Isaac's accidental trackpad touches
+  triggered OS gestures (three-finger swipes → Spaces/Mission Control) that
+  no browser can block. `mac-app/` holds a native macOS wrapper: a fullscreen
+  `WKWebView` on `games.f4t.dev` with `NSApplication.presentationOptions`
+  kiosk mode (Cmd-Tab, Spaces/Mission Control gestures, force quit, and log
+  out are suppressed while frontmost). Parent exit: hold Escape 3 s (progress
+  bar shows; was Cmd-Q at first). Known accepted risk: a toddler leaning on
+  Escape for 3 s quits the app, same tradeoff as the space-bar restart. Cursor auto-hides after 3 s idle. URL only, no bundled/offline
+  build — a deliberate decision. Build with `mac-app/build.sh`, install by
+  copying `IsaacGames.app` to /Applications.
 
 ### Resolved (2026-08-24)
 
@@ -169,3 +179,7 @@ rule inference, and it costs much more to implement than the other two.
   (2 s, eased so the night lingers before the morning brightens through).
   The cross-fade lives in `main.ts` because the renderer is per-session;
   the fade is the only thing that spans two sessions.
+- **2026-08-27 (later):** Built the macOS kiosk wrapper (`mac-app/`, see the
+  Environment section) after Isaac's trackpad touches kept triggering OS
+  gestures. Compiles clean; not yet launched — the first real launch is
+  Arthur's, since the app takes over the screen.

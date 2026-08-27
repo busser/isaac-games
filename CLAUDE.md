@@ -18,6 +18,10 @@ start). Before making design decisions, read:
 Multi-page Vite app: `index.html` is the launcher, each game gets its own
 `<game>.html` page and `src/<game>/` directory.
 
+`mac-app/` is a native macOS kiosk wrapper (Swift, built with
+`mac-app/build.sh`) that shows the deployed site fullscreen and blocks OS
+trackpad gestures. It is built locally, not deployed by CI.
+
 Within a game, `src/<game>/core/` is the pure layer: game rules and scenery
 generation, deterministic, no DOM, no audio. Time comes in through `now`
 arguments, randomness through injected RNGs. Core is unit-tested and must not
