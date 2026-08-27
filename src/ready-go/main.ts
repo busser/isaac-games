@@ -17,12 +17,28 @@ const startOverlay = document.getElementById('start')!;
 const audio = createAudio();
 
 const RESTART_HOLD_MS = 3000;
+// Resetting the day cross-fades the old night into the new morning: the last
+// night frame is kept as a snapshot and drawn over the fresh scene with
+// decaying alpha, so the night dissolves instead of cutting.
+const RESET_FADE_MS = 2000;
 
 let game: Game | null = null;
 let renderer: Renderer | null = null;
 // When the space bar went down, or -1 while it is up. Only holds that start
 // after the session ended count toward a restart.
 let spaceHeldSince = -1;
+let fadeSnapshot: HTMLCanvasElement | null = null;
+let fadeStartedAt = 0;
+
+function snapshotSceneForFade(now: number): void {
+  if (canvas.width === 0 || canvas.height === 0) return;
+  const snap = document.createElement('canvas');
+  snap.width = canvas.width;
+  snap.height = canvas.height;
+  snap.getContext('2d')!.drawImage(canvas, 0, 0);
+  fadeSnapshot = snap;
+  fadeStartedAt = now;
+}
 
 function dispatch(events: GameEvent[], now: number): void {
   for (const event of events) {
@@ -68,6 +84,7 @@ function frame(now: number): void {
       restartHold = Math.min(1, (now - spaceHeldSince) / RESTART_HOLD_MS);
       if (restartHold >= 1) {
         spaceHeldSince = -1;
+        snapshotSceneForFade(now);
         startSession();
         restartHold = 0;
       }
@@ -80,6 +97,20 @@ function frame(now: number): void {
       restartHold,
     );
     for (const cue of cues) audio.onCue(cue);
+    if (fadeSnapshot) {
+      const t = (now - fadeStartedAt) / RESET_FADE_MS;
+      if (t >= 1) {
+        fadeSnapshot = null;
+      } else {
+        const ctx = canvas.getContext('2d')!;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        // Ease-in: the night lingers, then the morning brightens through it.
+        ctx.globalAlpha = 1 - t * t;
+        ctx.drawImage(fadeSnapshot, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+    }
   }
   requestAnimationFrame(frame);
 }

@@ -163,3 +163,9 @@ rule inference, and it costs much more to implement than the other two.
   there was no easy way to make it look good. Features are now river or
   puddle; the tunnel's probability share went to feature-less rounds (~60%
   of rounds now have no feature).
+- **2026-08-27:** Smooth day reset. Holding space on the night scene used to
+  cut straight to the new morning. Now the last night frame is snapshotted
+  to an offscreen canvas and drawn over the fresh scene with decaying alpha
+  (2 s, eased so the night lingers before the morning brightens through).
+  The cross-fade lives in `main.ts` because the renderer is per-session;
+  the fade is the only thing that spans two sessions.
